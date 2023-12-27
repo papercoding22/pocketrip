@@ -1,30 +1,45 @@
-import {useEffect} from 'react';
-
-import {useDispatch, useSelector} from 'react-redux';
-import useUserDatabase from './services/users/hooks/useDatabase';
-import {
-  setAccessToken,
-  setRefreshToken,
-} from './services/users/redux/userSlice';
-import {RootState} from './store';
+import {useCallback, useEffect, useRef, useState} from 'react';
+import useBootstrapUserService from './services/users/hooks/useUserService';
 
 const useBootstrap = () => {
-  const dispatch = useDispatch();
-  const isAuthenticated = useSelector(
-    (state: RootState) =>
-      state.user.accessToken !== null && state.user.refreshToken !== null,
-  );
-  const {accessToken, refreshToken} = useUserDatabase();
+  const bootstrapped = useRef(false);
+  const [bootstrapError, setBootstrapError] = useState<Error | null>(null);
+  const [isBootstrapping, setIsBootstrapping] = useState(false);
+  const {isAuthenticated, bootstrap: bootstrapUserService} =
+    useBootstrapUserService();
+
+  const bootstrap = useCallback(async () => {
+    try {
+      setIsBootstrapping(true);
+      await bootstrapUserService();
+    } catch (error) {
+      setBootstrapError(error as Error);
+    } finally {
+      setIsBootstrapping(false);
+    }
+  }, [bootstrapUserService]);
+
+  const reload = useCallback(async () => {
+    setBootstrapError(null);
+    await bootstrap();
+  }, [bootstrap]);
 
   useEffect(() => {
-    if (accessToken && refreshToken) {
-      dispatch(setAccessToken(accessToken));
-      dispatch(setRefreshToken(refreshToken));
+    if (!bootstrapped.current) {
+      bootstrap().finally(() => {
+        bootstrapped.current = true;
+      });
     }
-  }, [accessToken, dispatch, refreshToken]);
+  }, [bootstrap]);
 
   return {
-    isAuthenticated,
+    bootstrapError,
+    isBootstrapping,
+    data: {
+      isAuthenticated,
+    },
+    bootstrap,
+    reload,
   };
 };
 
